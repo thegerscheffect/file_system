@@ -118,6 +118,22 @@ static int check_magic()
 static void bitmap_init(int start, int num, int nbits)
 {
   /* YOUR CODE */
+  static unsigned char bitmap[num];
+  char nbits1[8] = '10000000'; // Int blah  
+  char nbits2[8] = '11000000';
+  int i=0;
+
+  // Sector loop first
+  for(i=0; i<=num; i++) {
+    // Saving the stuff in each byte
+    while(i <= (nbits/8)) {
+
+    } 
+
+    // In sector loop, write to disk 
+    Disk_Write();
+  }
+
 }
 
 // set the first unused bit from a bitmap of 'nbits' bits (flip the
@@ -669,3 +685,21 @@ int Dir_Read(char* path, void* buffer, int size)
   return -1;
 }
 
+/* Get the path name that we want */ 
+int BreakPathName(char *pathName, char **arrayOfBreakPathName)
+{
+    int index = 0;
+    while (*pathName != '\0')
+    {
+        index++;
+        // if not the end of pathName
+        while (*pathName == '/')
+            *pathName++ = '\0';
+        if(*pathName)
+            *arrayOfBreakPathName++ = pathName; // save the argument position
+        while (*pathName != '/' && *pathName != '\0')
+            pathName++; // skip the argument until
+    }
+    *arrayOfBreakPathName = '\0'; // mark the end of argument list
+    return index;
+}
