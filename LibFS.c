@@ -112,28 +112,80 @@ static int check_magic()
   else return 0;
 }
 
+// helper function to assign bits to a character
+static char save_string_to_char(char* nbits) {
+	int i;
+	unsigned char result = 0;
+	for(i=0; i<8; ++i) {
+		result |= (nbits[i] == '1') << (7-i);
+	}
+	return result;
+}
+
 // initialize a bitmap with 'num' sectors starting from 'start'
 // sector; all bits should be set to zero except that the first
 // 'nbits' number of bits are set to one
-static void bitmap_init(int start, int num, int nbits)
-{
-  /* YOUR CODE */
-  static unsigned char bitmap[num];
-  char nbits1[8] = '10000000'; // Int blah  
-  char nbits2[8] = '11000000';
-  int i=0;
+static void bitmap_init(int start, int num, int nbits) {
 
-  // Sector loop first
-  for(i=0; i<=num; i++) {
-    // Saving the stuff in each byte
-    while(i <= (nbits/8)) {
+	/* YOUR CODE */
+	int bitmap_size = (num*SECTOR_BITMAP_SIZE)/8; // divided by 8 because the chars are each 8 bits
+	char bitmap[bitmap_size+1];
 
-    } 
+  	char nbits0[8] = "00000000";
+  	char nbits1[8] = "10000000";   
+  	char nbits2[8] = "11000000";
+  	char nbits3[8] = "11100000";
+  	char nbits4[8] = "11110000";
+  	char nbits5[8] = "11111000";
+  	char nbits6[8] = "11111100";
+  	char nbits7[8] = "11111110";
+  	char nbits8[8] = "11111111";
+  	int i=0;
+  	int j=0;
+ 
+  	//int remaining_bits = nbits;
+  	int full_char = nbits/8; // how many times we'll use nbits8
+  	int remaining_bits = nbits%8; // to use the other nbits#
+  	//int zero_index = full_char+1;
 
-    // In sector loop, write to disk 
-    Disk_Write();
-  }
+  	for(i=0; i<=bitmap_size+1; i++) { // traverse through the entire bitmap
 
+    		if(full_char>0) { // characters that are all one
+			for(j=0; j>full_char; j++) {
+				bitmap[j] = save_string_to_char(nbits8);
+			}
+		}
+		switch(remaining_bits) { // characters that are not all one including if nbits is 0
+			case 0: 
+				bitmap[full_char+i] = save_string_to_char(nbits0);
+				break;
+			case 1:
+				bitmap[full_char+i] = save_string_to_char(nbits1);
+				break;
+			case 2: 
+				bitmap[full_char+i] = save_string_to_char(nbits2);
+				break;
+			case 3: 
+				bitmap[full_char+i] = save_string_to_char(nbits3);
+				break;
+			case 4: 
+				bitmap[full_char+i] = save_string_to_char(nbits4);
+				break;
+			case 5: 
+				bitmap[full_char+i] = save_string_to_char(nbits5);
+				break;
+			case 6: 
+				bitmap[full_char+i] = save_string_to_char(nbits6);
+				break;
+			case 7: 
+				bitmap[full_char+i] = save_string_to_char(nbits7);
+				break;
+			case 8:
+				bitmap[full_char+i] = save_string_to_char(nbits8);
+				break;
+		}
+  	}
+	Disk_Write(start, bitmap); // write initialized bitmap to disk 
 }
 
 // set the first unused bit from a bitmap of 'nbits' bits (flip the
