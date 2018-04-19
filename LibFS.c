@@ -737,21 +737,3 @@ int Dir_Read(char* path, void* buffer, int size)
   return -1;
 }
 
-/* Get the path name that we want */ 
-int BreakPathName(char *pathName, char **arrayOfBreakPathName)
-{
-    int index = 0;
-    while (*pathName != '\0')
-    {
-        index++;
-        // if not the end of pathName
-        while (*pathName == '/')
-            *pathName++ = '\0';
-        if(*pathName)
-            *arrayOfBreakPathName++ = pathName; // save the argument position
-        while (*pathName != '/' && *pathName != '\0')
-            pathName++; // skip the argument until
-    }
-    *arrayOfBreakPathName = '\0'; // mark the end of argument list
-    return index;
-}
