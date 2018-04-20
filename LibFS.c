@@ -193,7 +193,55 @@ static void bitmap_init(int start, int num, int nbits) {
 // return -1 if the bitmap is already full (no more zeros)
 static int bitmap_first_unused(int start, int num, int nbits)
 {
-  /* YOUR CODE */
+  if(nbits/8 != (num*SECTOR_BITMAP_SIZE)/8){ 
+    char bitmap;
+    //This gives us the first sector not completely made of 1-valued bits
+    int sectors_covered = nbits/8;
+    Disk_Read(sectors_covered, bitmap);
+
+    char flip0[8] = "10000000";   
+    char flip1[8] = "11000000";
+    char flip2[8] = "11100000";
+    char flip3[8] = "11110000";
+    char flip4[8] = "11111000";
+    char flip5[8] = "11111100";
+    char flip6[8] = "11111110";
+    char flip7[8] = "11111111";
+  
+    //Exact location of the first unused bit within the sectors_covered sector
+    int zero_bit = nbits%8;
+
+    int bit_location = (sectors_covered * 8) + zero_bit;
+
+    switch(zero_bit) {
+      case 0: 
+        bitmap[sectors_covered] = save_string_to_char(flip0);
+        break;
+      case 1:
+        bitmap[sectors_covered] = save_string_to_char(flip1);
+        break;
+      case 2:
+        bitmap[sectors_covered] = save_string_to_char(flip2);
+        break;
+      case 3: 
+        bitmap[sectors_covered] = save_string_to_char(flip3);
+        break;
+      case 4: 
+        bitmap[sectors_covered] = save_string_to_char(flip4);
+        break;flip
+      case 5: 
+        bitmap[sectors_covered] = save_string_to_char(flip5);
+        break;
+      case 6: 
+        bitmap[sectors_covered] = save_string_to_char(flip6);
+        break;
+      case 7: 
+        bitmap[sectors_covered] = save_string_to_char(flip7);
+        break;
+    }
+  return bit_location;
+}
+
   return -1;
 }
 
