@@ -193,8 +193,11 @@ static void bitmap_init(int start, int num, int nbits) {
 // return -1 if the bitmap is already full (no more zeros)
 static int bitmap_first_unused(int start, int num, int nbits)
 {
-  if(nbits/8 != (num*SECTOR_BITMAP_SIZE)/8){ 
-    char bitmap;
+  /* YOUR CODE */
+  int bitmap_size = (num*SECTOR_BITMAP_SIZE)/8;
+  if(nbits/8 != bitmap_size) { 
+
+    char bitmap[bitmap_size+1];
     //This gives us the first sector not completely made of 1-valued bits
     int sectors_covered = nbits/8;
     Disk_Read(sectors_covered, bitmap);
@@ -228,7 +231,7 @@ static int bitmap_first_unused(int start, int num, int nbits)
         break;
       case 4: 
         bitmap[sectors_covered] = save_string_to_char(flip4);
-        break;flip
+        break;
       case 5: 
         bitmap[sectors_covered] = save_string_to_char(flip5);
         break;
@@ -245,12 +248,53 @@ static int bitmap_first_unused(int start, int num, int nbits)
   return -1;
 }
 
+// helper function to calculate exponential functions 
+int ipow(int base, int exp)
+{
+    int result = 1;
+    for (;;)
+    {
+        if (exp & 1)
+            result *= base;
+        exp >>= 1;
+        if (!exp)
+            break;
+        base *= base;
+    }
+
+    return result;
+}
+
 // reset the i-th bit of a bitmap with 'num' sectors starting from
 // 'start' sector; return 0 if successful, -1 otherwise
 static int bitmap_reset(int start, int num, int ibit)
 {
-  /* YOUR CODE */
-  return -1;
+	/* YOUR CODE */
+	int max_bits = SECTOR_SIZE*8; 
+	int temp_bit = ibit-1; // because index starts at 0
+	int bit_num = temp_bit%max_bits;
+	int sector_location = (temp_bit/max_bits) + start;
+
+	if(bit_num==0) {
+		sector_location -= 1;
+		bit_num = max_bits;
+	}
+
+	char buffer[SECTOR_SIZE];
+
+	Disk_Read(sector_location, buffer);
+
+	int byte_location = bit_num/8;
+	int bit_location = bit_num%8;
+	int temp_buffer = buffer[byte_location];
+	
+	int mask = 255 - ipow(2, 7-bit_location);
+
+	buffer[byte_location] = temp_buffer & mask;
+
+	Disk_Write(sector_location, buffer);
+
+  	return 0; // this doesn't check if unsuccessful. 
 }
 
 // return 1 if the file name is illegal; otherwise, return 0; legal
@@ -260,6 +304,7 @@ static int bitmap_reset(int start, int num, int ibit)
 static int illegal_filename(char* name)
 {
   /* YOUR CODE */
+
   return 1; 
 }
 
