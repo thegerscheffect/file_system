@@ -7,7 +7,7 @@
 #include "LibFS.h"
 
 // set to 1 to have detailed debug print-outs and 0 to have none
-#define FSDEBUG 0
+#define FSDEBUG 1 
 
 #if FSDEBUG
 #define dprintf printf
@@ -112,6 +112,7 @@ static int check_magic()
   else return 0;
 }
 
+/* FROM FIRST ATTEMPT
 // helper function to assign bits to a character
 static char save_string_to_char(char* nbits) {
 	int i;
@@ -121,6 +122,57 @@ static char save_string_to_char(char* nbits) {
 	}
 	return result;
 }
+*/
+
+
+// helper function to calculate exponential functions 
+int ipow(int base, int exp)
+{
+    int result = 1;
+    for (;;)
+    {
+        if (exp & 1)
+            result *= base;
+        exp >>= 1;
+        if (!exp)
+            break;
+        base *= base;
+    }
+
+    return result;
+}
+
+// helper function that assigns the ones when initializing the bitmap
+static void bitmap_init_helper(int nbits, int sector) {
+		
+	int full_sector = nbits/8; // sectors that contains all ones
+	int remaining_bits = nbits%8; // sectors that have remaining_bits amount of ones
+	int nbytes = full_sector;
+	char bitmap_buffer[SECTOR_SIZE];
+
+	if(remaining_bits>0) { 
+		nbytes++;
+	}
+
+	int i;
+	for(i=0; i<full_sector; i++) { // assigning the sectors that contain all ones
+		bitmap_buffer[i] = (unsigned char)255;	
+	}
+
+	if(remaining_bits>0) {
+		int counter=0;
+		for(i=7; i>7-remaining_bits; i--) {
+			counter += ipow(2,i);
+		}
+		bitmap_buffer[nbytes-1] = (unsigned char)counter;
+	}
+
+	for(i=nbytes; i<SECTOR_SIZE; i++) {
+		bitmap_buffer[i] = 0;
+	}
+
+	Disk_Write(sector, bitmap_buffer);
+}
 
 // initialize a bitmap with 'num' sectors starting from 'start'
 // sector; all bits should be set to zero except that the first
@@ -128,10 +180,8 @@ static char save_string_to_char(char* nbits) {
 static void bitmap_init(int start, int num, int nbits) {
 
 	/* YOUR CODE */
-	int bitmap_size = (num*SECTOR_BITMAP_SIZE)/8; // divided by 8 because the chars are each 8 bits
-	char bitmap[bitmap_size+1];
-
-  	char nbits0[8] = "00000000";
+/*
+	char nbits0[8] = "00000000";
   	char nbits1[8] = "10000000";   
   	char nbits2[8] = "11000000";
   	char nbits3[8] = "11100000";
@@ -140,13 +190,31 @@ static void bitmap_init(int start, int num, int nbits) {
   	char nbits6[8] = "11111100";
   	char nbits7[8] = "11111110";
   	char nbits8[8] = "11111111";
+*/
+
+	int max_bits = SECTOR_SIZE*8; // total number of bits in sector
+
+	dprintf("max_bits: %d\n", max_bits);
+
+	int i;
+	for(i=start; i<start+num; i++) { // traversing through every sector
+		if(nbits>max_bits) {
+			bitmap_init_helper(max_bits, i);
+			nbits -= max_bits;
+		} else {
+			bitmap_init_helper(nbits, i);
+			nbits=0;
+		}
+	}	
+/*
+	char bitmap[bitmap_size+1];
   	int i=0;
   	int j=0;
  
-  	//int remaining_bits = nbits;
+  	int remaining_bits = nbits;
   	int full_char = nbits/8; // how many times we'll use nbits8
   	int remaining_bits = nbits%8; // to use the other nbits#
-  	//int zero_index = full_char+1;
+  	int zero_index = full_char+1;
 
   	for(i=0; i<=bitmap_size+1; i++) { // traverse through the entire bitmap
 
@@ -186,6 +254,7 @@ static void bitmap_init(int start, int num, int nbits) {
 		}
   	}
 	Disk_Write(start, bitmap); // write initialized bitmap to disk 
+*/
 }
 
 // set the first unused bit from a bitmap of 'nbits' bits (flip the
@@ -194,6 +263,7 @@ static void bitmap_init(int start, int num, int nbits) {
 static int bitmap_first_unused(int start, int num, int nbits)
 {
   /* YOUR CODE */
+/*
   int bitmap_size = (num*SECTOR_BITMAP_SIZE)/8;
   if(nbits/8 != bitmap_size) { 
 
@@ -243,28 +313,73 @@ static int bitmap_first_unused(int start, int num, int nbits)
         break;
     }
   Disk_Write(start, bitmap);
+
   return bit_location;
 }
 
   return -1;
+*/
+
+	nbits *= 8;
+	char buffer[SECTOR_SIZE];
+	int i = start; 
+	int counterSectors = 0;
+
+
+	for(i=start; i<start+num; i++){
+		Disk_Read(start,buffer);
+
+		int mbps=SECTOR_SIZE*8;
+		int mbis=nbits;
+		if(mbis>mbps) {
+			mbis=mbps;
+			nbits-=mbps;
+		}
+
+		int maxBytesInSector = mbis/8;
+		if(maxBytesInSector%8>0) {
+			maxBytesInSector++;
+		}
+
+		int b;
+
+		for(b=0; b<maxBytesInSector; b++) {
+			char byte = buffer[b];
+
+			if(byte != (char)255){
+				unsigned char mask = byte ^ (unsigned char)255;
+
+				int counter=0;
+				int as = 8;
+
+				if(b==(maxBytesInSector-1)) {
+					as=maxBytesInSector*8 - mbis;
+				}
+
+				while(mask !=0) {
+					if(--as<0) {
+						return -1;
+					}
+					counter++;
+					mask=mask>>1;
+				}
+
+				if(counter==0)
+					counter=7;
+
+				mask = ipow(2, counter-1);
+				buffer[b] = buffer[b] | mask;
+				Disk_Write(i,buffer);
+
+				return (counterSectors*(SECTOR_SIZE*8) + (b*8) + (8-counter));
+			}
+		}
+		counterSectors++;
+	}
+	return -1;
 }
 
-// helper function to calculate exponential functions 
-int ipow(int base, int exp)
-{
-    int result = 1;
-    for (;;)
-    {
-        if (exp & 1)
-            result *= base;
-        exp >>= 1;
-        if (!exp)
-            break;
-        base *= base;
-    }
 
-    return result;
-}
 
 // reset the i-th bit of a bitmap with 'num' sectors starting from
 // 'start' sector; return 0 if successful, -1 otherwise
@@ -757,7 +872,7 @@ int File_Open(char* file)
     dprintf("... max open files reached\n");
     osErrno = E_TOO_MANY_OPEN_FILES;
     return -1;
-  }
+}
 
   int child_inode;
   follow_path(file, &child_inode, NULL);
