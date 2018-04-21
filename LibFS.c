@@ -242,6 +242,7 @@ static int bitmap_first_unused(int start, int num, int nbits)
         bitmap[sectors_covered] = save_string_to_char(flip7);
         break;
     }
+  Disk_Write(start, bitmap);
   return bit_location;
 }
 
@@ -270,31 +271,48 @@ int ipow(int base, int exp)
 static int bitmap_reset(int start, int num, int ibit)
 {
 	/* YOUR CODE */
-	int max_bits = SECTOR_SIZE*8; 
+	int max_bits = SECTOR_SIZE*8; // total amount of bits in a sector (maybe it is num*SECTOR_SIZE)
 	int temp_bit = ibit-1; // because index starts at 0
-	int bit_num = temp_bit%max_bits;
-	int sector_location = (temp_bit/max_bits) + start;
+	int bit_num = temp_bit%max_bits; // bit location on "last" sector
+	int sector_location = (temp_bit/max_bits) + start; // temp_bit/max_bits is always going to be 0??
 
-	if(bit_num==0) {
+	if(ibit>max_bits) 
+		return -1; // ibit is not in scope
+
+	printf("num value: %d\n", num);
+	printf("max_bits values: %d\n", max_bits);
+	printf("start value from bitmap_reset: %d\n", start);
+	printf("Sector location from bitmap_reset: %d\n", sector_location);
+
+	if(bit_num==0) { // if the i-th bit is the last bit from the previous sector
 		sector_location -= 1;
 		bit_num = max_bits;
 	}
 
+	// create a buffer where Disk_Read will load the current information from the sector_location
 	char buffer[SECTOR_SIZE];
-
 	Disk_Read(sector_location, buffer);
 
-	int byte_location = bit_num/8;
-	int bit_location = bit_num%8;
-	int temp_buffer = buffer[byte_location];
-	
-	int mask = 255 - ipow(2, 7-bit_location);
+	int byte_location = bit_num/8; // where this byte is in the sector
+	int bit_location = bit_num%8; // where this bit is in the sector
+
+	int temp_buffer = buffer[byte_location];	
+	int mask = 255 - ipow(2, 7-bit_location); // all ones except at bit_location
 
 	buffer[byte_location] = temp_buffer & mask;
+	Disk_Write(sector_location, buffer); // write back to sector
 
-	Disk_Write(sector_location, buffer);
+  	return 0; 
+}
 
-  	return 0; // this doesn't check if unsuccessful. 
+// helper function checking whether a character is valid
+static int valid_character(char c) {
+	int temp = (int)c; //casted to an int to compare with ascii decimal value
+
+	if((temp>=48 && temp<=57) || (temp>=65 && temp<=90) || (temp>=97 && temp<=122) || (temp>=45 && temp<=46) || temp==96) 
+		return 1;
+
+	return 0; // illegal character
 }
 
 // return 1 if the file name is illegal; otherwise, return 0; legal
@@ -303,9 +321,16 @@ static int bitmap_reset(int start, int num, int ibit)
 // should not be more than MAX_NAME-1 in length
 static int illegal_filename(char* name)
 {
-  /* YOUR CODE */
+	/* YOUR CODE */
+	if(strlen(name)>MAX_NAME-1) // check for legal file length
+		return 1;
 
-  return 1; 
+	int i;
+	for(i=0; i<strlen(name); i++) { // check for legal file name characters
+		if(valid_character(name[i])==0)
+			return 1;
+	}
+	return 0; 
 }
 
 // return the child inode of the given file name 'fname' from the
