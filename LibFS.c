@@ -124,12 +124,10 @@ static char save_string_to_char(char* nbits) {
 }
 */
 
-
 // helper function to calculate exponential functions 
-int ipow(int base, int exp)
-{
+int ipow(int base, int exp) {
     int result = 1;
-    for (;;)
+    for (;;) //unconditional for-loop
     {
         if (exp & 1)
             result *= base;
@@ -138,40 +136,35 @@ int ipow(int base, int exp)
             break;
         base *= base;
     }
-
     return result;
 }
 
 // helper function that assigns the ones when initializing the bitmap
 static void bitmap_init_helper(int nbits, int sector) {
-		
 	int full_sector = nbits/8; // sectors that contains all ones
 	int remaining_bits = nbits%8; // sectors that have remaining_bits amount of ones
 	int nbytes = full_sector;
 	char bitmap_buffer[SECTOR_SIZE];
 
-	if(remaining_bits>0) { 
+	if(remaining_bits>0) // remaining bits to be stored on additional byte
 		nbytes++;
-	}
 
 	int i;
-	for(i=0; i<full_sector; i++) { // assigning the sectors that contain all ones
-		bitmap_buffer[i] = (unsigned char)255;	
-	}
+	for(i=0; i<full_sector; i++) // assigning the sectors that contain all ones
+		bitmap_buffer[i] = (unsigned char)255;
 
-	if(remaining_bits>0) {
+	if(remaining_bits>0) { //creates the string containing the 'remaining_bits' amount of ones
 		int counter=0;
-		for(i=7; i>7-remaining_bits; i--) {
+		for(i=7; i>7-remaining_bits; i--)
 			counter += ipow(2,i);
-		}
+
 		bitmap_buffer[nbytes-1] = (unsigned char)counter;
 	}
 
-	for(i=nbytes; i<SECTOR_SIZE; i++) {
+	for(i=nbytes; i<SECTOR_SIZE; i++) // assign 0 to the rest of the bits in bitmap
 		bitmap_buffer[i] = 0;
-	}
 
-	Disk_Write(sector, bitmap_buffer);
+	Disk_Write(sector, bitmap_buffer); // write to sector
 }
 
 // initialize a bitmap with 'num' sectors starting from 'start'
@@ -180,81 +173,20 @@ static void bitmap_init_helper(int nbits, int sector) {
 static void bitmap_init(int start, int num, int nbits) {
 
 	/* YOUR CODE */
-/*
-	char nbits0[8] = "00000000";
-  	char nbits1[8] = "10000000";   
-  	char nbits2[8] = "11000000";
-  	char nbits3[8] = "11100000";
-  	char nbits4[8] = "11110000";
-  	char nbits5[8] = "11111000";
-  	char nbits6[8] = "11111100";
-  	char nbits7[8] = "11111110";
-  	char nbits8[8] = "11111111";
-*/
-
 	int max_bits = SECTOR_SIZE*8; // total number of bits in sector
-
+	int remaining_bits = nbits;
 	dprintf("max_bits: %d\n", max_bits);
 
 	int i;
 	for(i=start; i<start+num; i++) { // traversing through every sector
-		if(nbits>max_bits) {
-			bitmap_init_helper(max_bits, i);
-			nbits -= max_bits;
+		if(remaining_bits>max_bits) {
+			bitmap_init_helper(max_bits, i); // sector that will contain all ones
+			remaining_bits -= max_bits;
 		} else {
-			bitmap_init_helper(nbits, i);
-			nbits=0;
+			bitmap_init_helper(remaining_bits, i); // sector that will contain remaining bits
+			remaining_bits = 0; // last sector to contain ones so no more remaining bits
 		}
 	}	
-/*
-	char bitmap[bitmap_size+1];
-  	int i=0;
-  	int j=0;
- 
-  	int remaining_bits = nbits;
-  	int full_char = nbits/8; // how many times we'll use nbits8
-  	int remaining_bits = nbits%8; // to use the other nbits#
-  	int zero_index = full_char+1;
-
-  	for(i=0; i<=bitmap_size+1; i++) { // traverse through the entire bitmap
-
-    		if(full_char>0) { // characters that are all one
-			for(j=0; j>full_char; j++) {
-				bitmap[j] = save_string_to_char(nbits8);
-			}
-		}
-		switch(remaining_bits) { // characters that are not all one including if nbits is 0
-			case 0: 
-				bitmap[full_char+i] = save_string_to_char(nbits0);
-				break;
-			case 1:
-				bitmap[full_char+i] = save_string_to_char(nbits1);
-				break;
-			case 2: 
-				bitmap[full_char+i] = save_string_to_char(nbits2);
-				break;
-			case 3: 
-				bitmap[full_char+i] = save_string_to_char(nbits3);
-				break;
-			case 4: 
-				bitmap[full_char+i] = save_string_to_char(nbits4);
-				break;
-			case 5: 
-				bitmap[full_char+i] = save_string_to_char(nbits5);
-				break;
-			case 6: 
-				bitmap[full_char+i] = save_string_to_char(nbits6);
-				break;
-			case 7: 
-				bitmap[full_char+i] = save_string_to_char(nbits7);
-				break;
-			case 8:
-				bitmap[full_char+i] = save_string_to_char(nbits8);
-				break;
-		}
-  	}
-	Disk_Write(start, bitmap); // write initialized bitmap to disk 
-*/
 }
 
 // set the first unused bit from a bitmap of 'nbits' bits (flip the
@@ -262,124 +194,61 @@ static void bitmap_init(int start, int num, int nbits) {
 // return -1 if the bitmap is already full (no more zeros)
 static int bitmap_first_unused(int start, int num, int nbits)
 {
-  /* YOUR CODE */
-/*
-  int bitmap_size = (num*SECTOR_BITMAP_SIZE)/8;
-  if(nbits/8 != bitmap_size) { 
+	/* YOUR CODE */
+	nbits *= 8; // get total amount of bits
+	char sector_buffer[SECTOR_SIZE]; // create buffer for read into
+	int i = start; // start reading from start address
+	int sector_count = 0; 
 
-    char bitmap[bitmap_size+1];
-    //This gives us the first sector not completely made of 1-valued bits
-    int sectors_covered = nbits/8;
-    Disk_Read(sectors_covered, bitmap);
+	for(i=start; i<start+num; i++){ // traverse through each sector
+		int max_bits = SECTOR_SIZE*8; // total number of bits in sector
+		int max_bytes = max_bits/8; // maximum amount of bytes in sector
 
-    char flip0[8] = "10000000";   
-    char flip1[8] = "11000000";
-    char flip2[8] = "11100000";
-    char flip3[8] = "11110000";
-    char flip4[8] = "11111000";
-    char flip5[8] = "11111100";
-    char flip6[8] = "11111110";
-    char flip7[8] = "11111111";
-  
-    //Exact location of the first unused bit within the sectors_covered sector
-    int zero_bit = nbits%8;
+		Disk_Read(start, sector_buffer); // read onto buffer
+		
+		dprintf("nbits value: %d - max_bits value: %d\n", nbits, max_bits);
+		if(nbits>max_bits) // nbits cannot be bigger than max_bits
+			nbits = max_bits;
 
-    int bit_location = (sectors_covered * 8) + zero_bit;
+		if(max_bytes%8>0) // remaining bits to be stored on additional byte
+			max_bytes++;
 
-    switch(zero_bit) {
-      case 0: 
-        bitmap[sectors_covered] = save_string_to_char(flip0);
-        break;
-      case 1:
-        bitmap[sectors_covered] = save_string_to_char(flip1);
-        break;
-      case 2:
-        bitmap[sectors_covered] = save_string_to_char(flip2);
-        break;
-      case 3: 
-        bitmap[sectors_covered] = save_string_to_char(flip3);
-        break;
-      case 4: 
-        bitmap[sectors_covered] = save_string_to_char(flip4);
-        break;
-      case 5: 
-        bitmap[sectors_covered] = save_string_to_char(flip5);
-        break;
-      case 6: 
-        bitmap[sectors_covered] = save_string_to_char(flip6);
-        break;
-      case 7: 
-        bitmap[sectors_covered] = save_string_to_char(flip7);
-        break;
-    }
-  Disk_Write(start, bitmap);
+		int sector_byte;
+		for(sector_byte=0; sector_byte<max_bytes; sector_byte++) { //traverse through all bytes in sector
+			char byte_buffer = sector_buffer[sector_byte]; // get byte of sector
 
-  return bit_location;
-}
+			if(byte_buffer!=(char)255){ // if this byte is not all ones
+				unsigned char mask = ~byte_buffer; // mask contains a 1 where there is a 0
 
-  return -1;
-*/
+				int bit_location = 0; //
+				int as = 8; // size of byte
 
-	nbits *= 8;
-	char buffer[SECTOR_SIZE];
-	int i = start; 
-	int counterSectors = 0;
+				if(sector_byte==(max_bytes-1)) // last byte in sector
+					as = max_bits - nbits;
 
-
-	for(i=start; i<start+num; i++){
-		Disk_Read(start,buffer);
-
-		int mbps=SECTOR_SIZE*8;
-		int mbis=nbits;
-		if(mbis>mbps) {
-			mbis=mbps;
-			nbits-=mbps;
-		}
-
-		int maxBytesInSector = mbis/8;
-		if(maxBytesInSector%8>0) {
-			maxBytesInSector++;
-		}
-
-		int b;
-
-		for(b=0; b<maxBytesInSector; b++) {
-			char byte = buffer[b];
-
-			if(byte != (char)255){
-				unsigned char mask = byte ^ (unsigned char)255;
-
-				int counter=0;
-				int as = 8;
-
-				if(b==(maxBytesInSector-1)) {
-					as=maxBytesInSector*8 - mbis;
-				}
-
-				while(mask !=0) {
+				while(mask!=0) { // mask contains a 1
 					if(--as<0) {
-						return -1;
+						return -1; // no 1s, bitmap is full
 					}
-					counter++;
-					mask=mask>>1;
+					bit_location++; // next bit location
+					mask = mask>>1; // right-shift by one bit (drop one)
 				}
 
-				if(counter==0)
-					counter=7;
+				if(bit_location==0) // bit to flip is the right-most bit
+					bit_location=7;
 
-				mask = ipow(2, counter-1);
-				buffer[b] = buffer[b] | mask;
-				Disk_Write(i,buffer);
+				mask = ipow(2, bit_location-1); // mask to flip the bit
+				sector_buffer[sector_byte] = sector_buffer[sector_byte] | mask;
+ 
+				Disk_Write(i, sector_buffer); // write sector back to bitmap
 
-				return (counterSectors*(SECTOR_SIZE*8) + (b*8) + (8-counter));
+				return ((sector_count*SECTOR_SIZE*8) + (sector_byte*8) + (8-bit_location)); // flipped bit location
 			}
 		}
-		counterSectors++;
+		sector_count++; // go to the next byte
 	}
-	return -1;
+	return -1; // bitmap is already full
 }
-
-
 
 // reset the i-th bit of a bitmap with 'num' sectors starting from
 // 'start' sector; return 0 if successful, -1 otherwise
@@ -400,8 +269,8 @@ static int bitmap_reset(int start, int num, int ibit)
 	printf("Sector location from bitmap_reset: %d\n", sector_location);
 
 	if(bit_num==0) { // if the i-th bit is the last bit from the previous sector
-		sector_location -= 1;
-		bit_num = max_bits;
+		sector_location -= 1; // previos sector
+		bit_num = max_bits; // last bit
 	}
 
 	// create a buffer where Disk_Read will load the current information from the sector_location
