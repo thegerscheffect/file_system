@@ -7,7 +7,7 @@
 #include "LibFS.h"
 
 // set to 1 to have detailed debug print-outs and 0 to have none
-#define FSDEBUG 1 
+#define FSDEBUG 1
 
 #if FSDEBUG
 #define dprintf printf
@@ -112,18 +112,6 @@ static int check_magic()
   else return 0;
 }
 
-/* FROM FIRST ATTEMPT
-// helper function to assign bits to a character
-static char save_string_to_char(char* nbits) {
-	int i;
-	unsigned char result = 0;
-	for(i=0; i<8; ++i) {
-		result |= (nbits[i] == '1') << (7-i);
-	}
-	return result;
-}
-*/
-
 // helper function to calculate exponential functions 
 int ipow(int base, int exp) {
     int result = 1;
@@ -176,6 +164,8 @@ static void bitmap_init(int start, int num, int nbits) {
 	int max_bits = SECTOR_SIZE*8; // total number of bits in sector
 	int remaining_bits = nbits;
 	dprintf("max_bits: %d\n", max_bits);
+
+	dprintf("PLS WORK\n");
 
 	int i;
 	for(i=start; i<start+num; i++) { // traversing through every sector
@@ -552,8 +542,7 @@ int create_file_or_directory(int type, char* pathname)
 // remove the child from parent; the function is called by both
 // File_Unlink() and Dir_Unlink(); the function returns 0 if success,
 // -1 if general error, -2 if directory not empty, -3 if wrong type
-int remove_inode(int type, int parent_inode, int child_inode)
-{
+int remove_inode(int type, int parent_inode, int child_inode) {
   /* YOUR CODE */
   return -1;
 }
@@ -741,7 +730,7 @@ int File_Open(char* file)
     dprintf("... max open files reached\n");
     osErrno = E_TOO_MANY_OPEN_FILES;
     return -1;
-}
+  }
 
   int child_inode;
   follow_path(file, &child_inode, NULL);
