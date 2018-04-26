@@ -943,8 +943,20 @@ int File_Write(int fd, void* buffer, int size)
 
 int File_Seek(int fd, int offset)
 {
-  /* YOUR CODE */
-  return 0;
+	  if(is_file_open(open_files[fd].inode) != 1){ //going through open_file array to check if file is open
+		osErrno=E_BAD_FD;
+		return -1; 
+	  }
+
+	  dprintf("... Inside file seek open_files[%d].size= %d\n",fd, open_files[fd].size);
+		if(open_files[fd].size<offset || open_files[fd].size<0){
+		
+			osErrno = E_SEEK_OUT_OF_BOUNDS;
+			return -1;
+		}
+	  
+		open_files[fd].pos=offset;	
+		return open_files[fd].pos;  
 }
 
 int File_Close(int fd)
@@ -1016,14 +1028,93 @@ int Dir_Unlink(char* path) {
   return -1;
 }
 
-int Dir_Size(char* path)
-{
+// amount of things 
+int Dir_Size(char* path) {
+	if(getPathType(path) == 1){
+		int direntCounter = 0;
+		int child_inode;
+  		char last_fname[MAX_NAME];
+  		follow_path(path, &child_inode, last_fname);
+
+		inode_t * dir = getInode(child_inode);
+	
+		int i;
+		for(i = 0; i < 30; i++){
+			int sector = (unsigned char)dir->data[i];
+			
+			char sectorbuffer[SECTOR_SIZE];
+			Disk_Read(sector, sectorbuffer);
+			int j = 0;
+			for(j = 0; j < 25; j++){
+				dirent_t * entry = (dirent_t*)(sectorbuffer + j);
+				if(entry->inode > 0){ // if it's a directory 
+					dprintf("entry->fname: %s\n", entry->fname);
+					direntCounter += 1;
+				}	
+			}			
+		}
+
+		return direntCounter;
+	}
   /* YOUR CODE */
   return 0;
 }
 
-int Dir_Read(char* path, void* buffer, int size)
-{
+int Dir_Read(char* path, void* buffer, int size) {
+
+	int direntCounter = 0;
+
+	if(getPathType(path) == 1){  // if this is a directory
+		int start_inode; // inode of first file in directory
+  		char last_fname[MAX_NAME]; // last file name
+
+  		follow_path(path, &start_inode, last_fname); // tell us where start inode is
+
+		dprintf("MAX_SIZE: %d\n", MAX_NAME); 
+		
+		int dirsize = Dir_Size(path); // amount of things inside the directory
+		dprintf("dirsize: %d\n", dirsize);
+
+		buffer = calloc(sizeof(char), size);
+
+		if(size < dirsize){ // check if given buffer size was ok
+			osErrno = E_BUFFER_TOO_SMALL;
+			return -1;
+		}
+
+		inode_t * first = getInode(start_inode); // get stuff inside the inode
+	
+		if(first->type == 1){ // if the first file is a directory
+			int i;
+			//for(i = 0; i <= dirsize; i++){ //grab everything in that directory
+				int sector = (unsigned char)first->data[0]; // the first char	
+				//int sector = (unsigned char)first->data[i]; // the first char from inode
+				char sectorbuffer[SECTOR_SIZE]; // to grab one sector
+
+				Disk_Read(sector, sectorbuffer); // read a sector to sectorbuffer
+
+				//dprintf("sectorbuffer: %s\n", sectorbuffer);
+
+				int j=0;
+				//for(j = 0; j < dirsize; j++){
+
+					dprintf("sectorbuffer: %s\n", sectorbuffer + j);
+
+					dirent_t* entry = (dirent_t*)(sectorbuffer + j); // grab the first inode in sector
+
+					if(entry->inode == 1){ // if its a directory
+
+						dprintf("entry->fname %s\n", entry->fname);
+						dprintf("entry->inode: %d\n", entry->inode);		
+						sprintf(buffer, sectorbuffer, entry->inode++);	
+						//sprintf(buffer, "%d", 1);	
+					}	
+				//}			
+			//}	
+	}		
+		return direntCounter;
+	}
+
   /* YOUR CODE */
   return -1;
 }
