@@ -7,7 +7,7 @@
 #include "LibFS.h"
 
 // set to 1 to have detailed debug print-outs and 0 to have none
-#define FSDEBUG 1
+#define FSDEBUG 0
 
 #if FSDEBUG
 #define dprintf printf
@@ -253,10 +253,10 @@ static int bitmap_reset(int start, int num, int ibit)
 	if(ibit>max_bits) 
 		return -1; // ibit is not in scope
 
-	printf("num value: %d\n", num);
-	printf("max_bits values: %d\n", max_bits);
-	printf("start value from bitmap_reset: %d\n", start);
-	printf("Sector location from bitmap_reset: %d\n", sector_location);
+	dprintf("num value: %d\n", num);
+	dprintf("max_bits values: %d\n", max_bits);
+	dprintf("start value from bitmap_reset: %d\n", start);
+	dprintf("Sector location from bitmap_reset: %d\n", sector_location);
 
 	if(bit_num==0) { // if the i-th bit is the last bit from the previous sector
 		sector_location -= 1; // previos sector
@@ -539,12 +539,90 @@ int create_file_or_directory(int type, char* pathname)
   }
 }
 
+//func to get inode_t
+inode_t* getInode(int child_inode) {
+
+  int inode_sector = INODE_TABLE_START_SECTOR+child_inode/INODES_PER_SECTOR;
+  char inode_buffer[SECTOR_SIZE];
+  Disk_Read(inode_sector, inode_buffer);
+  // get the child inode
+  int inode_start_entry = (inode_sector-INODE_TABLE_START_SECTOR)*INODES_PER_SECTOR;
+  int offset = child_inode-inode_start_entry;
+  assert(0 <= offset && offset < INODES_PER_SECTOR);
+  inode_t* child = (inode_t*)(inode_buffer+offset*sizeof(inode_t));
+  return child;
+}
+
+int unlinkFromParent(int parent_inode,int child_inode){
+
+	inode_t* parent = getInode(parent_inode);
+		
+	dprintf("size of parent inode %d \n", parent->size);
+
+	int i;
+	for(i = 0; i < 30; i++){
+		int sector = parent->data[i];
+		dprintf("Sector used by parent dir %d \n",sector);
+		char sectorbuffer[SECTOR_SIZE];
+		Disk_Read(sector, sectorbuffer);
+		int j = 0;
+		//int direntCounter = 0;
+		for(j = 0; j < 25; j++){
+			dirent_t * entry = (dirent_t*)(sectorbuffer + (j*20));
+			dprintf("dirent name:%s ionde:%d\n",entry->fname, entry->inode);
+				
+			if(entry->inode == child_inode){
+				memset(entry, 0, sizeof(dirent_t));
+				//direntCounter--;
+				Disk_Write(sector, sectorbuffer);
+				return 0;
+			}				
+		}
+	}
+	return -1;
+}
+
 // remove the child from parent; the function is called by both
 // File_Unlink() and Dir_Unlink(); the function returns 0 if success,
 // -1 if general error, -2 if directory not empty, -3 if wrong type
 int remove_inode(int type, int parent_inode, int child_inode) {
   /* YOUR CODE */
-  return -1;
+	if(type == 0){//file
+		inode_t * file = getInode(child_inode);
+		
+		int i;
+
+		for(i = 0; i < 30; i++){
+			int sector = (unsigned char)file->data[i];
+			
+			if(sector != 0){
+				
+				char buffer[SECTOR_SIZE];
+				memset(buffer, 0, SECTOR_SIZE);
+				Disk_Write(sector, buffer);
+				bitmap_reset(2, 3, sector+1); //reset sector used by file.
+				
+				
+				Disk_Read(1,buffer);
+			}
+		}	
+
+		char buffer[SECTOR_SIZE];
+		Disk_Read(1,buffer);
+		
+		bitmap_reset(1,1, child_inode+1);
+		Disk_Read(1,buffer);
+
+		unlinkFromParent(parent_inode, child_inode);	
+		return 0;
+
+	} else if(type == 1){
+
+		unlinkFromParent(parent_inode, child_inode);
+		return 0;
+	}
+
+  return -3; //Wrong Type;
 }
 
 // representing an open file
@@ -716,8 +794,28 @@ int File_Create(char* file)
   return create_file_or_directory(0, file);
 }
 
-int File_Unlink(char* file)
+int File_Unlink(char* pathname)
 {
+  	int child_inode;
+  	char last_fname[MAX_NAME];
+  	int parent_inode = follow_path(pathname, &child_inode, last_fname);
+
+	if(child_inode < 1){
+		osErrno = E_NO_SUCH_FILE;
+		return -1;
+	}
+
+	if(is_file_open(child_inode) == 1){
+		osErrno = E_FILE_IN_USE;
+		return -1;
+	}
+	
+	//at this point, file exists and path is valid.
+
+	if(remove_inode(0, parent_inode, child_inode) >= 0){
+		return 0;
+	}
+	
   /* YOUR CODE */
   return -1;
 }
@@ -775,8 +873,72 @@ int File_Read(int fd, void* buffer, int size)
 
 int File_Write(int fd, void* buffer, int size)
 {
+	if(fd < 0 && fd > MAX_OPEN_FILES){
+		osErrno = E_BAD_FD;
+		return -1;
+	}
+
+	if(open_files[fd].inode < 1){
+		osErrno = E_BAD_FD;
+		return -1;
+	}
+
+	int bytesToWrite = size;
+	int initialPos = open_files[fd].pos;
+
+	int startSector = open_files[fd].pos / SECTOR_SIZE;
+
+	
+	int endSector = startSector + ((size+open_files[fd].pos+SECTOR_SIZE-1)/SECTOR_SIZE);
+
+	if(endSector > 29){
+		osErrno = E_FILE_TOO_BIG;
+		return -1;
+	}
+
+	int i; 
+
+	inode_t * inode = getInode(open_files[fd].inode); 
+
+	for(i=startSector; i<endSector;i++){
+		char buffer[SECTOR_SIZE];
+		int sector = inode->data[i];
+		if(sector == 0){
+			sector = bitmap_first_unused(SECTOR_BITMAP_START_SECTOR, SECTOR_BITMAP_SECTORS, SECTOR_BITMAP_SIZE);
+
+		}
+
+		if(open_files[fd].pos == 0){
+			if(bytesToWrite >= SECTOR_SIZE){
+				char diskBuffer[SECTOR_SIZE];
+				memcpy(diskBuffer, (buffer + i*SECTOR_SIZE), SECTOR_SIZE);
+				
+				Disk_Write(sector,diskBuffer);
+				bytesToWrite -= SECTOR_SIZE;
+			} else{
+				char diskBuffer[SECTOR_SIZE];
+				memcpy(diskBuffer, (buffer + i*SECTOR_SIZE), bytesToWrite);
+				Disk_Write(sector,diskBuffer);
+				
+				bytesToWrite = 0;				
+			}
+		} else{
+			int x = SECTOR_SIZE - open_files[fd].size;
+			char diskBuffer[SECTOR_SIZE];
+			Disk_Read(sector,diskBuffer);
+			memcpy(diskBuffer, (diskBuffer +open_files[fd].size), x );
+			Disk_Write(sector,diskBuffer);
+			
+			bytesToWrite -= x;
+			open_files[fd].pos = 0;	
+		}	
+	}
+
+	open_files[fd].pos = initialPos + size;	
+	return size;
+	
   /* YOUR CODE */
-  return -1;
+  //return -1;
 }
 
 int File_Seek(int fd, int offset)
@@ -810,9 +972,47 @@ int Dir_Create(char* path)
   return create_file_or_directory(1, path);
 }
 
-int Dir_Unlink(char* path)
-{
+//returns 0 if dir, 1 if file -1 for error.
+int getPathType(char * pathname){
+
+	int child_inode;
+	char last_fname[MAX_NAME];
+	follow_path(pathname, &child_inode, last_fname);
+
+	if(child_inode == -1){
+		return -1;
+	}
+
+	inode_t * temp = getInode(child_inode);
+
+	return temp->type;
+}
+
+int Dir_Unlink(char* path) {
   /* YOUR CODE */
+	if(!strcmp(path, "/") != 0){
+		osErrno = E_NO_SUCH_DIR;
+		return -1;
+	}
+
+	if(getPathType(path) == 1){
+		
+		int child_inode;
+  		char last_fname[MAX_NAME];
+  		int parent_inode = follow_path(path, &child_inode, last_fname);
+
+		inode_t * temp = getInode(child_inode);
+
+		if(temp->size > 0){
+			osErrno = E_DIR_NOT_EMPTY;
+			
+			return -1;
+		}
+
+		if(remove_inode(1, parent_inode, child_inode) >= 0){
+			return 0;
+		}
+	}
   return -1;
 }
 
