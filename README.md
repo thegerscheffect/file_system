@@ -13,9 +13,24 @@ The successfully implemented commands for this project do the following:
 * Remove a directory
 * List all the items in the disk, or given path
 
+### To complile the code, type the following commands into your terminal
+```
+make
+```
+This should compile the all the files and create the necessary executables for all the required tests.
+
+### Before running tests
+Set up a shared library link path:
+```
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:.
+```
+and remove any previous testing output:
+```
+make reset
+```
 NOTE: It's important to note that the tests cannot be run on an old disk. Creation of duplicated files/directory will not occur, it will result in an error.
 
-### To run the tests, simply type the following commands in your terminal
+### To run the tests, type the following commands into your terminal
 
 Perform simple test:
 ```
