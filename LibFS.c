@@ -588,11 +588,9 @@ int remove_inode(int type, int parent_inode, int child_inode) {
 				memset(buffer, 0, SECTOR_SIZE); // fill the buffer block with 0s
 				Disk_Write(sector, buffer); // write the buffer to the sector
 				bitmap_reset(2, 3, sector+1); // reset sector used by file
-				//Disk_Read(1, buffer); 
 			}
 		}
 		bitmap_reset(1, 1, child_inode+1); // set the bit back to 0 in the bitmap
-		//Disk_Read(1, buffer); // read the contents from the index
 		unlink_helper(parent_inode, child_inode); // and unlink or remove the entry from parent
 
 		return 0;
