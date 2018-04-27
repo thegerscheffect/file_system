@@ -128,7 +128,7 @@ int ipow(int base, int exp) {
 }
 
 // helper function that assigns the ones when initializing the bitmap
-static void bitmap_init_helper(int nbits, int sector) {
+static void save_bits_to_bitmap(int nbits, int sector) {
 	int full_sector = nbits/8; // sectors that contains all ones
 	int remaining_bits = nbits%8; // sectors that have remaining_bits amount of ones
 	int nbytes = full_sector;
@@ -159,21 +159,16 @@ static void bitmap_init_helper(int nbits, int sector) {
 // sector; all bits should be set to zero except that the first
 // 'nbits' number of bits are set to one
 static void bitmap_init(int start, int num, int nbits) {
-
 	/* YOUR CODE */
 	int max_bits = SECTOR_SIZE*8; // total number of bits in sector
 	int remaining_bits = nbits;
-	dprintf("max_bits: %d\n", max_bits);
-
-	dprintf("PLS WORK\n");
-
 	int i;
 	for(i=start; i<start+num; i++) { // traversing through every sector
 		if(remaining_bits>max_bits) {
-			bitmap_init_helper(max_bits, i); // sector that will contain all ones
+			save_bits_to_bitmap(max_bits, i); // sector that will contain all ones
 			remaining_bits -= max_bits;
 		} else {
-			bitmap_init_helper(remaining_bits, i); // sector that will contain remaining bits
+			save_bits_to_bitmap(remaining_bits, i); // sector that will contain remaining bits
 			remaining_bits = 0; // last sector to contain ones so no more remaining bits
 		}
 	}	
@@ -182,8 +177,7 @@ static void bitmap_init(int start, int num, int nbits) {
 // set the first unused bit from a bitmap of 'nbits' bits (flip the
 // first zero appeared in the bitmap to one) and return its location;
 // return -1 if the bitmap is already full (no more zeros)
-static int bitmap_first_unused(int start, int num, int nbits)
-{
+static int bitmap_first_unused(int start, int num, int nbits) {
 	/* YOUR CODE */
 	nbits *= 8; // get total amount of bits
 	char sector_buffer[SECTOR_SIZE]; // create buffer for read into
@@ -242,8 +236,7 @@ static int bitmap_first_unused(int start, int num, int nbits)
 
 // reset the i-th bit of a bitmap with 'num' sectors starting from
 // 'start' sector; return 0 if successful, -1 otherwise
-static int bitmap_reset(int start, int num, int ibit)
-{
+static int bitmap_reset(int start, int num, int ibit) {
 	/* YOUR CODE */
 	int max_bits = SECTOR_SIZE*8; // total amount of bits in a sector (maybe it is num*SECTOR_SIZE)
 	int temp_bit = ibit-1; // because index starts at 0
@@ -256,7 +249,7 @@ static int bitmap_reset(int start, int num, int ibit)
 	dprintf("num value: %d\n", num);
 	dprintf("max_bits values: %d\n", max_bits);
 	dprintf("start value from bitmap_reset: %d\n", start);
-	dprintf("Sector location from bitmap_reset: %d\n", sector_location);
+	dprintf("sector location from bitmap_reset: %d\n", sector_location);
 
 	if(bit_num==0) { // if the i-th bit is the last bit from the previous sector
 		sector_location -= 1; // previos sector
@@ -293,8 +286,7 @@ static int valid_character(char c) {
 // characters for a file name include letters (case sensitive),
 // numbers, dots, dashes, and underscores; and a legal file name
 // should not be more than MAX_NAME-1 in length
-static int illegal_filename(char* name)
-{
+static int illegal_filename(char* name) {
 	/* YOUR CODE */
 	if(strlen(name)>MAX_NAME-1) // check for legal file length
 		return 1;
@@ -539,90 +531,80 @@ int create_file_or_directory(int type, char* pathname)
   }
 }
 
-//func to get inode_t
-inode_t* getInode(int child_inode) {
+// helper function to get a specific inode_t
+inode_t* get_inode(int child_inode) {
+	int inode_sector = INODE_TABLE_START_SECTOR+child_inode/INODES_PER_SECTOR; // inode indexing
+  	char inode_buffer[SECTOR_SIZE]; // buffer to store the inode
 
-  int inode_sector = INODE_TABLE_START_SECTOR+child_inode/INODES_PER_SECTOR;
-  char inode_buffer[SECTOR_SIZE];
-  Disk_Read(inode_sector, inode_buffer);
-  // get the child inode
-  int inode_start_entry = (inode_sector-INODE_TABLE_START_SECTOR)*INODES_PER_SECTOR;
-  int offset = child_inode-inode_start_entry;
-  assert(0 <= offset && offset < INODES_PER_SECTOR);
-  inode_t* child = (inode_t*)(inode_buffer+offset*sizeof(inode_t));
-  return child;
+  	Disk_Read(inode_sector, inode_buffer); // save data in inode_sector onto inode_buffer
+
+  	int child_loc = child_inode-((inode_sector-INODE_TABLE_START_SECTOR)*INODES_PER_SECTOR); // child-inode indexing 
+
+  	//assert(0 <= child_loc && child_loc < INODES_PER_SECTOR); // checks whether or not this is true. Throws an error if not. 
+  	inode_t* child = (inode_t*)(inode_buffer+child_loc*sizeof(inode_t));
+  
+	return child;
 }
 
-int unlinkFromParent(int parent_inode,int child_inode){
-
-	inode_t* parent = getInode(parent_inode);
-		
-	dprintf("size of parent inode %d \n", parent->size);
+// helper function to unlink the file from the parent node
+int unlink_helper(int parent_inode,int child_inode) {
+	inode_t* parent = get_inode(parent_inode); // grab the inode of the parent
 
 	int i;
-	for(i = 0; i < 30; i++){
-		int sector = parent->data[i];
-		dprintf("Sector used by parent dir %d \n",sector);
-		char sectorbuffer[SECTOR_SIZE];
-		Disk_Read(sector, sectorbuffer);
-		int j = 0;
-		//int direntCounter = 0;
+	for(i = 0; i < 30; i++) {
+		int sector_data = parent->data[i];
+		char sector_buffer[SECTOR_SIZE];
+
+		Disk_Read(sector_data, sector_buffer); // read data from sector and save into sector_buffer
+
+		int j;
 		for(j = 0; j < 25; j++){
-			dirent_t * entry = (dirent_t*)(sectorbuffer + (j*20));
-			dprintf("dirent name:%s ionde:%d\n",entry->fname, entry->inode);
+			dirent_t * entry = (dirent_t*)(sector_buffer + (j*20)); //grab all the data from the sector 
 				
 			if(entry->inode == child_inode){
 				memset(entry, 0, sizeof(dirent_t));
-				//direntCounter--;
-				Disk_Write(sector, sectorbuffer);
+				Disk_Write(sector_data, sector_buffer);
 				return 0;
 			}				
 		}
 	}
-	return -1;
+	return -1; // error when unlinking
 }
 
 // remove the child from parent; the function is called by both
 // File_Unlink() and Dir_Unlink(); the function returns 0 if success,
 // -1 if general error, -2 if directory not empty, -3 if wrong type
 int remove_inode(int type, int parent_inode, int child_inode) {
-  /* YOUR CODE */
-	if(type == 0){//file
-		inode_t * file = getInode(child_inode);
+	/* YOUR CODE */
+	if(type==0) { // if this is a file
+		char buffer[SECTOR_SIZE];
+		inode_t* file = get_inode(child_inode); // grab the inode
 		
 		int i;
-
 		for(i = 0; i < 30; i++){
 			int sector = (unsigned char)file->data[i];
 			
-			if(sector != 0){
-				
-				char buffer[SECTOR_SIZE];
-				memset(buffer, 0, SECTOR_SIZE);
-				Disk_Write(sector, buffer);
-				bitmap_reset(2, 3, sector+1); //reset sector used by file.
-				
-				
-				Disk_Read(1,buffer);
+			if(sector != 0){		
+				memset(buffer, 0, SECTOR_SIZE); // fill the buffer block with 0s
+				Disk_Write(sector, buffer); // write the buffer to the sector
+				bitmap_reset(2, 3, sector+1); // reset sector used by file
+				//Disk_Read(1, buffer); 
 			}
-		}	
+		}
+		bitmap_reset(1, 1, child_inode+1); // set the bit back to 0 in the bitmap
+		//Disk_Read(1, buffer); // read the contents from the index
+		unlink_helper(parent_inode, child_inode); // and unlink or remove the entry from parent
 
-		char buffer[SECTOR_SIZE];
-		Disk_Read(1,buffer);
-		
-		bitmap_reset(1,1, child_inode+1);
-		Disk_Read(1,buffer);
-
-		unlinkFromParent(parent_inode, child_inode);	
 		return 0;
 
-	} else if(type == 1){
-
-		unlinkFromParent(parent_inode, child_inode);
+	} else if(type==1) { // if this is a directory
+		unlink_helper(parent_inode, child_inode); 
 		return 0;
+
+	} else if(type==-1){
+		return -3; // wrong type
 	}
-
-  return -3; //Wrong Type;
+  	return -2; // general error
 }
 
 // representing an open file
@@ -794,30 +776,23 @@ int File_Create(char* file)
   return create_file_or_directory(0, file);
 }
 
-int File_Unlink(char* pathname)
-{
-  	int child_inode;
-  	char last_fname[MAX_NAME];
-  	int parent_inode = follow_path(pathname, &child_inode, last_fname);
+/* This function is the opposite of File_Create(). This function should delete the file referenced by file, including removing its name from the directory it is in, and freeing up any data blocks and inodes that the file has been using. If the file does not currently exist, return -1 and set osErrno to E_NO_SUCH_FILE. If the file is currently open, return -1 and set osErrno to E_FILE_IN_USE (and do NOT delete the file). Upon success, return 0. */
+int File_Unlink(char* pathname) {
+	/* YOUR CODE */ 
+  	int child_inode; 
+  	char filename[MAX_NAME];
+  	int parent_inode = follow_path(pathname, &child_inode, filename); // finds the parent
 
-	if(child_inode < 1){
-		osErrno = E_NO_SUCH_FILE;
-		return -1;
-	}
-
-	if(is_file_open(child_inode) == 1){
+	if(child_inode < 1){ // if file does not exist
+		osErrno = E_NO_SUCH_FILE; 
+		return -1; // file is not deleted
+	} else if(is_file_open(child_inode) == 1){ // if file is in use
 		osErrno = E_FILE_IN_USE;
-		return -1;
-	}
-	
-	//at this point, file exists and path is valid.
-
-	if(remove_inode(0, parent_inode, child_inode) >= 0){
+		return -1; // file is not deleted
+	} else if(remove_inode(0, parent_inode, child_inode) >= 0){ // file can be deleted
 		return 0;
 	}
-	
-  /* YOUR CODE */
-  return -1;
+ 	return -1;
 }
 
 int File_Open(char* file)
@@ -871,92 +846,71 @@ int File_Read(int fd, void* buffer, int size)
   return -1;
 }
 
-int File_Write(int fd, void* buffer, int size)
-{
-	if(fd < 0 && fd > MAX_OPEN_FILES){
+/* File_Write() should write size bytes from buffer and write them into the file referenced by fd. All writes should begin at the current location of the file pointer and the file pointer should be updated after the write to its current location plus size. Note that writes are the only way to extend the size of a file. If the file is not open, return -1 and set osErrno to E_BAD_FD. Upon success of the write, all the data should be written out to disk and the value of size should be returned. If the write cannot complete (due to a lack of space on disk), return -1 and set osErrno to E_NO_SPACE. Finally, if the file exceeds the maximum file size, you should return -1and set osErrno to E_FILE_TOO_BIG. */
+int File_Write(int fd, void* buffer, int size) {
+	/* YOUR CODE */ 
+	int remaining_bytes = size; // the bytes remaining to write
+	int initial_position = open_files[fd].pos; // initial position to start write
+	int start = open_files[fd].pos / SECTOR_SIZE; // current location of file pointer
+	int end = start + ((size+open_files[fd].pos+SECTOR_SIZE-1)/SECTOR_SIZE); // end point after write
+
+	// error checking
+	if(fd<0 && fd>MAX_OPEN_FILES) { // not enough space on the disk
+		osErrno = E_NO_SPACE;
+		return -1;
+	} else if(open_files[fd].inode < 1){ // if the file is not open
 		osErrno = E_BAD_FD;
 		return -1;
-	}
-
-	if(open_files[fd].inode < 1){
-		osErrno = E_BAD_FD;
-		return -1;
-	}
-
-	int bytesToWrite = size;
-	int initialPos = open_files[fd].pos;
-
-	int startSector = open_files[fd].pos / SECTOR_SIZE;
-
-	
-	int endSector = startSector + ((size+open_files[fd].pos+SECTOR_SIZE-1)/SECTOR_SIZE);
-
-	if(endSector > 29){
+	} else if(end > 29){ // file exceeds maximum file size
 		osErrno = E_FILE_TOO_BIG;
 		return -1;
 	}
-
+	
+	inode_t* inode = get_inode(open_files[fd].inode); // grab file inode
 	int i; 
+	for(i=start; i<end; i++) { // write everything byte by byte
+		char data_buffer[SECTOR_SIZE];
+		char disk_buffer[SECTOR_SIZE];
+		int sector = inode->data[i]; 
 
-	inode_t * inode = getInode(open_files[fd].inode); 
-
-	for(i=startSector; i<endSector;i++){
-		char buffer[SECTOR_SIZE];
-		int sector = inode->data[i];
-		if(sector == 0){
+		if(sector==0) // find location where the information should be stored
 			sector = bitmap_first_unused(SECTOR_BITMAP_START_SECTOR, SECTOR_BITMAP_SECTORS, SECTOR_BITMAP_SIZE);
 
-		}
-
-		if(open_files[fd].pos == 0){
-			if(bytesToWrite >= SECTOR_SIZE){
-				char diskBuffer[SECTOR_SIZE];
-				memcpy(diskBuffer, (buffer + i*SECTOR_SIZE), SECTOR_SIZE);
-				
-				Disk_Write(sector,diskBuffer);
-				bytesToWrite -= SECTOR_SIZE;
-			} else{
-				char diskBuffer[SECTOR_SIZE];
-				memcpy(diskBuffer, (buffer + i*SECTOR_SIZE), bytesToWrite);
-				Disk_Write(sector,diskBuffer);
-				
-				bytesToWrite = 0;				
+		if(open_files[fd].pos == 0){ 
+			// if all the remaining bytes don't fit in one sector
+			if(remaining_bytes >= SECTOR_SIZE){ // buffer gets as much as possible
+				memcpy(disk_buffer, (data_buffer + i*SECTOR_SIZE), SECTOR_SIZE);
+				remaining_bytes -= SECTOR_SIZE;
+			} else{ // buffer gets everything
+				memcpy(disk_buffer, (data_buffer + i*SECTOR_SIZE), remaining_bytes);
+				remaining_bytes = 0;				
 			}
+			Disk_Write(sector, disk_buffer); // write data to sector
 		} else{
-			int x = SECTOR_SIZE - open_files[fd].size;
-			char diskBuffer[SECTOR_SIZE];
-			Disk_Read(sector,diskBuffer);
-			memcpy(diskBuffer, (diskBuffer +open_files[fd].size), x );
-			Disk_Write(sector,diskBuffer);
-			
-			bytesToWrite -= x;
+			Disk_Read(sector, disk_buffer);
+			memcpy(disk_buffer, (disk_buffer+open_files[fd].size), SECTOR_SIZE-open_files[fd].size);
+			Disk_Write(sector, disk_buffer);
+			remaining_bytes -= SECTOR_SIZE-open_files[fd].size;
 			open_files[fd].pos = 0;	
 		}	
 	}
-
-	open_files[fd].pos = initialPos + size;	
-	return size;
-	
-  /* YOUR CODE */
-  //return -1;
+	open_files[fd].pos = initial_position+size; // move end file pointer to the end
+	return size; // return total number of bytes added
 }
 
-int File_Seek(int fd, int offset)
-{
-	  if(is_file_open(open_files[fd].inode) != 1){ //going through open_file array to check if file is open
-		osErrno=E_BAD_FD;
+/* File_Seek() should update the current location of the file pointer. The location is given as an offset from the beginning of the file. If offset is larger than the size of the file or negative, return -1 and set osErrno to E_SEEK_OUT_OF_BOUNDS. If the file is not currently open, return -1 and set osErrno to E_BAD_FD. Upon success, return the new location of the file pointer. */
+int File_Seek(int fd, int offset) {
+	/* YOUR CODE */ 
+	if(is_file_open(open_files[fd].inode) != 1) { // file is not open
+		osErrno = E_BAD_FD;
 		return -1; 
-	  }
-
-	  dprintf("... Inside file seek open_files[%d].size= %d\n",fd, open_files[fd].size);
-		if(open_files[fd].size<offset || open_files[fd].size<0){
-		
-			osErrno = E_SEEK_OUT_OF_BOUNDS;
-			return -1;
-		}
+	} else if(open_files[fd].size<offset || open_files[fd].size<0) { // offset if larger than file size
+		osErrno = E_SEEK_OUT_OF_BOUNDS;
+		return -1;
+	}
 	  
-		open_files[fd].pos=offset;	
-		return open_files[fd].pos;  
+	open_files[fd].pos = offset; // new location of file pointer
+	return open_files[fd].pos;  
 }
 
 int File_Close(int fd)
@@ -984,138 +938,109 @@ int Dir_Create(char* path)
   return create_file_or_directory(1, path);
 }
 
-//returns 0 if dir, 1 if file -1 for error.
-int getPathType(char * pathname){
+// helper function that returns 0 if path leads to a directory or 1 if path leads to a file
+int get_path_type(char* pathname) {
+	int token; 
+	char filename[MAX_NAME];
+	follow_path(pathname, &token, filename); // find the token
 
-	int child_inode;
-	char last_fname[MAX_NAME];
-	follow_path(pathname, &child_inode, last_fname);
-
-	if(child_inode == -1){
+	if(token==-1) // if token is invalid
 		return -1;
-	}
 
-	inode_t * temp = getInode(child_inode);
-
-	return temp->type;
+	inode_t* inode = get_inode(token); // get inode of this token
+	return inode->type; // return the type of this token
 }
 
+/* Dir_Unlink() removes a directory referred to by path, freeing up its inode and data blocks, and removing its entry from the parent directory. Upon success, return 0. If the directory does not currently exist, return -1 and set osErrno to E_NO_SUCH_DIR. Dir_Unlink() should only be successful if there are no files within the directory. If there are still files within the directory, return -1 and set osErrno to E_DIR_NOT_EMPTY. It’s not allowed to remove the root directory ("/"), in which case the function should return -1 and set osErrno to E_ROOT_DIR. */
 int Dir_Unlink(char* path) {
-  /* YOUR CODE */
-	if(!strcmp(path, "/") != 0){
+	/* YOUR CODE */
+	if(!strcmp(path, "/") != 0) { // directory does not exist
 		osErrno = E_NO_SUCH_DIR;
 		return -1;
-	}
+	} else if (strcmp(path, "/") == 0) { // can't unlink the root
+		osErrno = E_ROOT_DIR;
+		return -1;
+	} else if(get_path_type(path) == 1) { // if path is a directory
+		int token;
+  		char filename[MAX_NAME];
+  		int parent_inode = follow_path(path, &token, filename);
 
-	if(getPathType(path) == 1){
-		
-		int child_inode;
-  		char last_fname[MAX_NAME];
-  		int parent_inode = follow_path(path, &child_inode, last_fname);
-
-		inode_t * temp = getInode(child_inode);
-
-		if(temp->size > 0){
+		inode_t* inode = get_inode(token); // get inode of token
+		if(inode->size > 0){ // there are still files within the directory
 			osErrno = E_DIR_NOT_EMPTY;
-			
 			return -1;
-		}
-
-		if(remove_inode(1, parent_inode, child_inode) >= 0){
+		} else if(remove_inode(1, parent_inode, token) >= 0){ // all clear; remove directory
 			return 0;
 		}
 	}
-  return -1;
+	return -1;
 }
 
-// amount of things 
+/* Dir_Size() returns the number of bytes in the directory referred to by path. This function should be used to find the size of the directory before calling Dir_Read() (described below) to find the contents of the directory. */
 int Dir_Size(char* path) {
-	if(getPathType(path) == 1){
-		int direntCounter = 0;
-		int child_inode;
-  		char last_fname[MAX_NAME];
-  		follow_path(path, &child_inode, last_fname);
-
-		inode_t * dir = getInode(child_inode);
-	
+	/* YOUR CODE */ 
+	if(get_path_type(path)==1) { // if this is a directory
+		int token;
+  		char filename[MAX_NAME];
+		follow_path(path, &token, filename); // find the location of token
+		inode_t* directory_inode = get_inode(token); // get the inode of token
+		
+		int byte_counter = 0;
 		int i;
-		for(i = 0; i < 30; i++){
-			int sector = (unsigned char)dir->data[i];
-			
-			char sectorbuffer[SECTOR_SIZE];
-			Disk_Read(sector, sectorbuffer);
-			int j = 0;
-			for(j = 0; j < 25; j++){
-				dirent_t * entry = (dirent_t*)(sectorbuffer + j);
-				if(entry->inode > 0){ // if it's a directory 
-					dprintf("entry->fname: %s\n", entry->fname);
-					direntCounter += 1;
-				}	
+		for(i=0; i<30; i++){ // for all 30 allocated data blocks per file
+			int sector = (unsigned char)directory_inode->data[i]; // grab data from inode
+			char sector_buffer[SECTOR_SIZE];
+			Disk_Read(sector, sector_buffer); // save data onto sector_buffer
+
+			int j;
+			for(j=0; j<25; j++){ 
+				dirent_t* entry = (dirent_t*)(sector_buffer + (j*20)); // multiplied by 20 because each entry contains 16-byte names + 4-byte integer inode numbers
+				if(entry->inode>0)
+					byte_counter+=20; // each entry is 20 bytes
 			}			
 		}
-
-		return direntCounter;
+		return byte_counter; // return total byte count
 	}
-  /* YOUR CODE */
-  return 0;
+  return 0; // files do not have any bytes referred to by path
 }
 
+/* Dir_Read() can be used to read the contents of a directory. It should return in the buffer a set of directory entries. Each entry is of size 20 bytes and contains 16-byte names of the files (or directories) within the directory named by path, followed by the 4-byte integer inode number. If size is not big enough to contain all the entries, return -1 and set osErrno to E_BUFFER_TOO_SMALL. Otherwise, read the data into the buffer, and return the number of directory entries that are in the directory (e.g., 2 if there are two entries in the directory). */
 int Dir_Read(char* path, void* buffer, int size) {
-
-	int direntCounter = 0;
-
-	if(getPathType(path) == 1){  // if this is a directory
-		int start_inode; // inode of first file in directory
-  		char last_fname[MAX_NAME]; // last file name
-
-  		follow_path(path, &start_inode, last_fname); // tell us where start inode is
-
-		dprintf("MAX_SIZE: %d\n", MAX_NAME); 
+	/* YOUR CODE */
+	int byte_counter = 0;
+	if(get_path_type(path)==1) {
+		int token;
+  		char filename[MAX_NAME];
+  		follow_path(path, &token, filename); // find location of token
 		
-		int dirsize = Dir_Size(path); // amount of things inside the directory
-		dprintf("dirsize: %d\n", dirsize);
+		int directory_size = Dir_Size(path); 
+		dprintf("directory size: %d\n", directory_size);
 
-		buffer = calloc(sizeof(char), size);
-
-		if(size < dirsize){ // check if given buffer size was ok
+		if(size < directory_size) { // size cannot contain all entries
 			osErrno = E_BUFFER_TOO_SMALL;
 			return -1;
 		}
 
-		inode_t * first = getInode(start_inode); // get stuff inside the inode
-	
-		if(first->type == 1){ // if the first file is a directory
+		printf("\t%-15s\t%-s\n", "NAME", "INODE");
+		inode_t* inode = get_inode(token);
+		if(inode->type == 1){ // if it's a directory
 			int i;
-			//for(i = 0; i <= dirsize; i++){ //grab everything in that directory
-				int sector = (unsigned char)first->data[0]; // the first char	
-				//int sector = (unsigned char)first->data[i]; // the first char from inode
-				char sectorbuffer[SECTOR_SIZE]; // to grab one sector
-
-				Disk_Read(sector, sectorbuffer); // read a sector to sectorbuffer
-
-				//dprintf("sectorbuffer: %s\n", sectorbuffer);
-
-				int j=0;
-				//for(j = 0; j < dirsize; j++){
-
-					dprintf("sectorbuffer: %s\n", sectorbuffer + j);
-
-					dirent_t* entry = (dirent_t*)(sectorbuffer + j); // grab the first inode in sector
-
-					if(entry->inode == 1){ // if its a directory
-
-						dprintf("entry->fname %s\n", entry->fname);
-						dprintf("entry->inode: %d\n", entry->inode);		
-						sprintf(buffer, sectorbuffer, entry->inode++);	
-						//sprintf(buffer, "%d", 1);	
-					}	
-				//}			
-			//}	
-	}		
-		return direntCounter;
+			for(i=0; i<30; i++) { // for all 30 allocated data blocks per file
+				int sector = (unsigned char)inode->data[i];
+				char sector_buffer[SECTOR_SIZE];
+				Disk_Read(sector, sector_buffer);
+				
+				int j;				
+				for(j=0; j<25; j++) {
+					dirent_t* entry = (dirent_t*)(sector_buffer + (j*20));
+					
+					if(entry->inode > 0)
+						printf("%-4d\t%-15s\t%-d\n", j, entry->fname, entry->inode);
+				}
+			}
+		}
+		return byte_counter;
 	}
-
-  /* YOUR CODE */
-  return -1;
+  	return -1;
 }
 
