@@ -539,8 +539,6 @@ inode_t* get_inode(int child_inode) {
   	Disk_Read(inode_sector, inode_buffer); // save data in inode_sector onto inode_buffer
 
   	int child_loc = child_inode-((inode_sector-INODE_TABLE_START_SECTOR)*INODES_PER_SECTOR); // child-inode indexing 
-
-  	//assert(0 <= child_loc && child_loc < INODES_PER_SECTOR); // checks whether or not this is true. Throws an error if not. 
   	inode_t* child = (inode_t*)(inode_buffer+child_loc*sizeof(inode_t));
   
 	return child;
@@ -774,7 +772,13 @@ int File_Create(char* file)
   return create_file_or_directory(0, file);
 }
 
-/* This function is the opposite of File_Create(). This function should delete the file referenced by file, including removing its name from the directory it is in, and freeing up any data blocks and inodes that the file has been using. If the file does not currently exist, return -1 and set osErrno to E_NO_SUCH_FILE. If the file is currently open, return -1 and set osErrno to E_FILE_IN_USE (and do NOT delete the file). Upon success, return 0. */
+/* This function is the opposite of File_Create(). This function should
+delete the file referenced by file, including removing its name from the
+directory it is in, and freeing up any data blocks and inodes that the file
+has been using. If the file does not currently exist, return -1 and set
+osErrno to E_NO_SUCH_FILE. If the file is currently open, return -1 and set
+osErrno to E_FILE_IN_USE (and do NOT delete the file). Upon success, return
+0. */
 int File_Unlink(char* pathname) {
 	/* YOUR CODE */ 
   	int child_inode; 
@@ -844,7 +848,16 @@ int File_Read(int fd, void* buffer, int size)
   return -1;
 }
 
-/* File_Write() should write size bytes from buffer and write them into the file referenced by fd. All writes should begin at the current location of the file pointer and the file pointer should be updated after the write to its current location plus size. Note that writes are the only way to extend the size of a file. If the file is not open, return -1 and set osErrno to E_BAD_FD. Upon success of the write, all the data should be written out to disk and the value of size should be returned. If the write cannot complete (due to a lack of space on disk), return -1 and set osErrno to E_NO_SPACE. Finally, if the file exceeds the maximum file size, you should return -1and set osErrno to E_FILE_TOO_BIG. */
+/* File_Write() should write size bytes from buffer and write them into the
+file referenced by fd. All writes should begin at the current location of
+the file pointer and the file pointer should be updated after the write to
+its current location plus size. Note that writes are the only way to extend
+the size of a file. If the file is not open, return -1 and set osErrno to
+E_BAD_FD. Upon success of the write, all the data should be written out to
+disk and the value of size should be returned. If the write cannot complete
+(due to a lack of space on disk), return -1 and set osErrno to E_NO_SPACE.
+Finally, if the file exceeds the maximum file size, you should return -1 and
+set osErrno to E_FILE_TOO_BIG. */
 int File_Write(int fd, void* buffer, int size) {
 	/* YOUR CODE */ 
 	int remaining_bytes = size; // the bytes remaining to write
@@ -896,7 +909,12 @@ int File_Write(int fd, void* buffer, int size) {
 	return size; // return total number of bytes added
 }
 
-/* File_Seek() should update the current location of the file pointer. The location is given as an offset from the beginning of the file. If offset is larger than the size of the file or negative, return -1 and set osErrno to E_SEEK_OUT_OF_BOUNDS. If the file is not currently open, return -1 and set osErrno to E_BAD_FD. Upon success, return the new location of the file pointer. */
+/* File_Seek() should update the current location of the file pointer. The
+location is given as an offset from the beginning of the file. If offset is
+larger than the size of the file or negative, return -1 and set osErrno to
+E_SEEK_OUT_OF_BOUNDS. If the file is not currently open, return -1 and set
+osErrno to E_BAD_FD. Upon success, return the new location of the file
+pointer. */
 int File_Seek(int fd, int offset) {
 	/* YOUR CODE */ 
 	if(is_file_open(open_files[fd].inode) != 1) { // file is not open
@@ -949,7 +967,14 @@ int get_path_type(char* pathname) {
 	return inode->type; // return the type of this token
 }
 
-/* Dir_Unlink() removes a directory referred to by path, freeing up its inode and data blocks, and removing its entry from the parent directory. Upon success, return 0. If the directory does not currently exist, return -1 and set osErrno to E_NO_SUCH_DIR. Dir_Unlink() should only be successful if there are no files within the directory. If there are still files within the directory, return -1 and set osErrno to E_DIR_NOT_EMPTY. It’s not allowed to remove the root directory ("/"), in which case the function should return -1 and set osErrno to E_ROOT_DIR. */
+/* Dir_Unlink() removes a directory referred to by path, freeing up its
+inode and data blocks, and removing its entry from the parent directory.
+Upon success, return 0. If the directory does not currently exist, return
+-1 and set osErrno to E_NO_SUCH_DIR. Dir_Unlink() should only be successful
+if there are no files within the directory. If there are still files within
+the directory, return -1 and set osErrno to E_DIR_NOT_EMPTY. It’s not
+allowed to remove the root directory ("/"), in which case the function
+should return -1 and set osErrno to E_ROOT_DIR. */
 int Dir_Unlink(char* path) {
 	/* YOUR CODE */
 	if(!strcmp(path, "/") != 0) { // directory does not exist
@@ -974,7 +999,9 @@ int Dir_Unlink(char* path) {
 	return -1;
 }
 
-/* Dir_Size() returns the number of bytes in the directory referred to by path. This function should be used to find the size of the directory before calling Dir_Read() (described below) to find the contents of the directory. */
+/* Dir_Size() returns the number of bytes in the directory referred to by
+path. This function should be used to find the size of the directory before
+calling Dir_Read() (described below) to find the contents of the directory. */
 int Dir_Size(char* path) {
 	/* YOUR CODE */ 
 	if(get_path_type(path)==1) { // if this is a directory
@@ -1002,7 +1029,14 @@ int Dir_Size(char* path) {
   return 0; // files do not have any bytes referred to by path
 }
 
-/* Dir_Read() can be used to read the contents of a directory. It should return in the buffer a set of directory entries. Each entry is of size 20 bytes and contains 16-byte names of the files (or directories) within the directory named by path, followed by the 4-byte integer inode number. If size is not big enough to contain all the entries, return -1 and set osErrno to E_BUFFER_TOO_SMALL. Otherwise, read the data into the buffer, and return the number of directory entries that are in the directory (e.g., 2 if there are two entries in the directory). */
+/* Dir_Read() can be used to read the contents of a directory. It should
+return in the buffer a set of directory entries. Each entry is of size 20
+bytes and contains 16-byte names of the files (or directories) within the
+directory named by path, followed by the 4-byte integer inode number. If
+size is not big enough to contain all the entries, return -1 and set
+osErrno to E_BUFFER_TOO_SMALL. Otherwise, read the data into the buffer, 
+and return the number of directory entries that are in the directory (e.g.,
+2 if there are two entries in the directory). */
 int Dir_Read(char* path, void* buffer, int size) {
 	/* YOUR CODE */
 	int byte_counter = 0;
