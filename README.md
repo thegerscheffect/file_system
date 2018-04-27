@@ -1,10 +1,10 @@
-#COP 4610 Final Project - File System Implementation
+# COP 4610 Final Project - File System Implementation
 
 The objective of this project was to understand how a file system works, specifically the directory hierarchy and storage management. Also, to understand some of the performance issues file systems must deal with.
 
 In this project, we built a user-level library, libFS, that implements a file system. Our file system will be built inside of a library that applications can link with to access files and directories. The library links with a layer that implements a "disk"; the library is provided, LibDisk. The only modified file in this project is LibFS.c.
 
-##Running the tests
+## Running the tests
 
 The successfully implemented commands for this project do the following: 
 * Create a file 
@@ -15,7 +15,7 @@ The successfully implemented commands for this project do the following:
 
 NOTE: It's important to note that the tests cannot be run on an old disk. Creation of duplicated files/directory will not occur, it will result in an error.
 
-###To run the tests, simply type the following commands in your terminal
+### To run the tests, simply type the following commands in your terminal
 
 Perform simple test:
 ```
