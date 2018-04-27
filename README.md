@@ -1,4 +1,4 @@
-# COP 4610 Final Project - File System Implementation
+# Operating Systems (COP 4610) Final Project - File System Implementation
 
 The objective of this project was to understand how a file system works, specifically the directory hierarchy and storage management. Also, to understand some of the performance issues file systems must deal with.
 
