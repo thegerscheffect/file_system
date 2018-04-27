@@ -1,18 +1,57 @@
-This directory contains a partial implementation of the simple file
-system for project 4. The partial implementation is in
-LibFS.c; it's heavily commented code so hopefully the implementation
-is self-explanatory. The places marked as YOUR CODE are to be filled
-in by your implementation.
+# COP 4610 Final Project - File System Implementation
 
-NOTE THAT THE IMPLEMENTATION PROVIDED HERE IS PURELY DESIGNED TO HELP
-YOU COMPLETE THE TASK. YOU DO NOT HAVE TO FOLLOW THE IMPLEMENTATION.
-BUT IF YOU DO, PAY ATTENTION TO THE DETAILS. THERE IS NOT GUARANTEE
-THAT THE PROVIDED PARTIAL IMPLEMENTATION IS BUG-FREE CODE OR CONSIDERS
-ALL POSSIBLE SCENARIOS.
+The objective of this project was to understand how a file system works, specifically the directory hierarchy and storage management. Also, to understand some of the performance issues file systems must deal with.
 
-The directory also contains a number of test applications implmement
-file system commands, including ls, mkdir, cat, rm, rmdir. The touch
-command is to create an empty file. The import and export commands
-used for copying a unix file into and out from our simple file system.
+In this project, we built a user-level library, libFS, that implements a file system. Our file system will be built inside of a library that applications can link with to access files and directories. The library links with a layer that implements a "disk"; the library is provided, LibDisk. The only modified file in this project is LibFS.c.
 
-Enjoy coding!
+## Running the tests
+
+The successfully implemented commands for this project do the following: 
+* Create a file 
+* Remove a file
+* Create a directory 
+* Remove a directory
+* List all the items in the disk, or given path
+
+NOTE: It's important to note that the tests cannot be run on an old disk. Creation of duplicated files/directory will not occur, it will result in an error.
+
+### To run the tests, simply type the following commands in your terminal
+
+Perform simple test:
+```
+./simple-test.exe test 
+```
+List the file system:
+```
+./slow-ls.exe test / 
+```
+Touch a file to the file system:
+```
+./slow-touch.exe test /testfile 
+```
+Check if the new created file is showing:
+```
+./slow-ls.exe test / 
+```
+Remove file:
+```
+./slow-rm.exe test /testfile
+```
+Check the remove result:
+```
+./slow-ls.exe test /
+```
+Create directory:
+```
+./slow-mkdir.exe test /dirnew 
+```
+```
+./slow-ls.exe test / 
+```
+Remove directory:
+```
+./slow-rmdir.exe test /dirnew 
+```
+```
+./slow-ls.exe test / 
+```
