@@ -13,7 +13,7 @@ The successfully implemented commands for this project do the following:
 * Remove a directory
 * List all the items in the disk, or given path
 
-### To complile the code, type the following commands into your terminal
+### To compile the code, type the following commands into your terminal
 ```
 make
 ```
